@@ -56,3 +56,44 @@ D. Softmax for Physical Constraints:
    The final Softmax layer mathematically guarantees physical laws. The exponential 
    function ensures Non-Negativity (ANC), and dividing by the sum ensures the 
    channels for each pixel add up exactly to 1.0 (ASC).
+
+--------------------------------------------------------------------------------
+3. TRAINING, RECONSTRUCTION, AND BACKPROPAGATION
+--------------------------------------------------------------------------------
+
+A. Image Reconstruction (Forward Pass):
+   The CNN outputs the Abundance Maps (A), which tell us the physical fractions 
+   of materials in every pixel. However, the CNN knows nothing about the actual 
+   "colors" (spectral signatures). 
+   To compare the CNN's guess with reality, we take the pure Endmembers (E) that 
+   we found earlier using SiVM, and multiply them by the CNN's output:
+        Y_hat = E * A
+   Y_hat is our network's "reconstructed" hyperspectral image.
+
+B. Calculating the Error:
+   We compare our reconstructed image (Y_hat) directly against the actual, observed 
+   hyperspectral image (Y) from the satellite/sensor. We use the Mean Squared 
+   Error (MSE) loss function: 
+        Loss = || Y - Y_hat ||^2
+
+C. Error Propagation (Backward Pass):
+   Once the Loss is calculated, PyTorch uses backpropagation to calculate the 
+   gradients. The error flows backward:
+   1. Through the MSE function.
+   2. Through the linear matrix multiplication (E * A).
+   3. Back into the CNN's Softmax layer, then through the Decoders, Skip 
+      Connections, and Encoders.
+   An optimizer (like Adam) then updates the internal weights of the CNN to make 
+   Y_hat look slightly more like Y on the next iteration.
+
+D. When Do We Stop the CNN?
+   Unlike traditional deep learning where you train on thousands of images and 
+   stop when validation loss plateaus, Deep Image Prior trains on a SINGLE image.
+   We run the network for a fixed 3000 iterations.
+   - Why not earlier? It takes time for the network to uncover the complex 
+     global structure of the image.
+   - Why not forever? If you train a Deep Image Prior network for too long (e.g., 
+     30,000+ iterations), it will eventually "overfit" and start memorizing the 
+     random sensor noise. Stopping at ~3000 iterations is the "sweet spot" where 
+     the network has learned the smooth physical landscape but hasn't had enough 
+     time to learn the high-frequency static noise.
