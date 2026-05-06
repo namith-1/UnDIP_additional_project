@@ -1,0 +1,58 @@
+================================================================================
+UnmixArch: Deep Image Prior CNN Architecture Details
+================================================================================
+
+The UnmixArch architecture is a specialized Encoder-Decoder (U-Net style) network 
+tailored for hyperspectral unmixing. It maps fixed random noise (Z) to physical 
+abundance maps (A) while utilizing spatial bottlenecking to regularize the output.
+
+--------------------------------------------------------------------------------
+1. TENSOR DIMENSIONS & KERNEL SIZES AT EACH LAYER
+--------------------------------------------------------------------------------
+Example dimensions provided below are for the Jasper Ridge dataset:
+- Endmembers (p) = 4
+- Spatial Resolution = 100 x 100 pixels
+- Input Noise Z = (Batch=1, Channels=4, Height=100, Width=100)
+
+| Layer Name / Operation     | Kernel | Stride | Input Dim (C x H x W)  | Output Dim (C x H x W) | Activation |
+|----------------------------|--------|--------|------------------------|------------------------|------------|
+| 0. Input Noise (Z)         | -      | -      | -                      | 4 x 100 x 100          | -          |
+| 1. skip_conv (Skip Branch) | 1x1    | 1      | 4 x 100 x 100          | 4 x 100 x 100          | LeakyReLU  |
+| 2a. enc_conv1 (Downsample) | 3x3    | 2      | 4 x 100 x 100          | 256 x 50 x 50          | LeakyReLU  |
+| 2b. enc_conv2 (Extract)    | 3x3    | 1      | 256 x 50 x 50          | 256 x 50 x 50          | LeakyReLU  |
+| 3. upsample (Bilinear)     | -      | -      | 256 x 50 x 50          | 256 x 100 x 100        | -          |
+| 4. concat_0 (Skip + Up)    | -      | -      | (4 + 256) x 100 x 100  | 260 x 100 x 100        | BatchNorm  |
+| 5a. dec_conv_0 (Post-fuse) | 3x3    | 1      | 260 x 100 x 100        | 256 x 100 x 100        | LeakyReLU  |
+| 5b. dec_1x1_0              | 1x1    | 1      | 256 x 100 x 100        | 256 x 100 x 100        | LeakyReLU  |
+| 6a. final_conv             | 1x1    | 1      | 256 x 100 x 100        | 4 x 100 x 100          | -          |
+| 6b. softmax                | -      | -      | 4 x 100 x 100          | 4 x 100 x 100          | Softmax    |
+
+--------------------------------------------------------------------------------
+2. ARCHITECTURAL DESIGN CHOICES EXPLAINED
+--------------------------------------------------------------------------------
+
+A. Why Stride 2 in the Encoder?
+   The 3x3 convolution with stride=2 acts as a pooling mechanism. It shrinks the 
+   image by half (100x100 -> 50x50). This spatial bottleneck prevents the network 
+   from memorizing pixel-level noise, forcing it to compress information into 
+   deep feature channels (256). The network MUST learn the "macro-structure" of 
+   the landscape because it loses the resolution to memorize random noise.
+
+B. Why a 1x1 Convolution for the Skip Connection?
+   The input noise Z has p=4 channels. Before concatenating it directly to the 
+   256-channel decoder, we pass it through a 1x1 convolution. This allows the 
+   network to learn a specific, localized, and weighted transformation of the raw 
+   input noise. This feature seamlessly integrates with the upsampled decoder 
+   features, preserving high-frequency edge details without overpowering the 
+   global structure.
+
+C. The Final 1x1 Convolution:
+   The second-to-last layer squashes the massive 256-channel feature map down 
+   to exactly p=4 channels (one channel for each endmember: Tree, Water, Road, Dirt). 
+   It operates purely on the channel dimension, leaving the spatial dimensions 
+   untouched (100x100).
+
+D. Softmax for Physical Constraints:
+   The final Softmax layer mathematically guarantees physical laws. The exponential 
+   function ensures Non-Negativity (ANC), and dividing by the sum ensures the 
+   channels for each pixel add up exactly to 1.0 (ASC).
