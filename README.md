@@ -2,7 +2,7 @@
 
 This repository contains an end-to-end Python/PyTorch implementation of the **UnDIP (Hyperspectral Unmixing using Deep Image Prior)** framework, based on the 2022 paper by Behnood Rasti et al.
 
-> **AI Context Note:** This document serves as the primary metadata reference for any AI agent or developer working in this repository. It documents the exact directory structures, the mathematical quirks of the algorithms used, and the empirical baselines achieved.
+
 
 ## Directory Structure
 
